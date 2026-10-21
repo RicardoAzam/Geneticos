@@ -121,36 +121,22 @@ typedef struct {
 } Config;
 ```
 
-A ideia é deixar os métodos configuráveis desde o início, mesmo que ainda não saibamos quais serão.
-
 ---
 
 # 5. Arquitetura simplificada
-
-Não haverá uma grande quantidade de módulos.
-
-A primeira versão será organizada assim:
 
 ```text
 tsp-genetico/
 │
 ├── README.md
-├── Makefile
-│
-├── include/
 │   ├── ponto.h
 │   ├── individuo.h
 │   ├── genetico.h
 │   └── resultados.h
-│
-├── src/
 │   ├── main.c
 │   ├── ponto.c
 │   ├── individuo.c
 │   ├── genetico.c
-│   └── resultados.c
-│
-└── resultados/
 ```
 
 ### Responsabilidade de cada arquivo
@@ -204,17 +190,6 @@ método de mutação 1
 ```
 
 Quando o grupo definir os métodos, eles serão implementados nesse módulo.
-
----
-
-### `resultados.c / resultados.h`
-
-Responsável por:
-
-- mostrar resultados no terminal;
-- registrar resultados por época;
-- salvar resultados em CSV;
-- registrar tempo de execução.
 
 ---
 
@@ -402,193 +377,7 @@ Isso permitirá criar gráficos posteriormente.
 
 ---
 
-# 12. Divisão do trabalho
-
-A divisão será feita por grandes responsabilidades, evitando que cada pessoa precise conhecer todo o código.
-
-## Pessoa 1 - Geração dos dados
-
-Responsável por:
-
-- `ponto.c`
-- `ponto.h`
-- geração aleatória;
-- geração circular;
-- testes dos pontos.
-
----
-
-## Pessoa 2 - Indivíduos e avaliação
-
-Responsável por:
-
-- `individuo.c`
-- `individuo.h`
-- representação da rota;
-- geração dos indivíduos;
-- cálculo da distância;
-- função de aptidão;
-- gerenciamento de memória.
-
----
-
-## Pessoa 3 - Operadores do AG
-
-Responsável pela parte correspondente aos métodos dentro de:
-
-```text
-genetico.c
-```
-
-Inicialmente:
-
-```text
-Método de seleção
-Método de cruzamento
-Método de mutação
-```
-
-Os métodos ainda não serão definidos.
-
----
-
-## Pessoa 4 - Integração e resultados
-
-Responsável por:
-
-- `genetico.c` — estrutura geral do algoritmo;
-- `resultados.c`;
-- `resultados.h`;
-- `main.c`;
-- medição do tempo;
-- CSV;
-- integração dos módulos.
-
-A Pessoa 4 trabalhará junto com a Pessoa 3 na integração do algoritmo.
-
----
-
-# 13. Cronograma de duas semanas
-
-## Semana 1 — Implementação
-
-### Dias 1–2
-
-Definir:
-
-- estruturas;
-- interfaces dos `.h`;
-- configuração;
-- organização do Git;
-- geração dos pontos.
-
-### Dias 3–5
-
-Desenvolver:
-
-- indivíduos;
-- distância;
-- aptidão;
-- população;
-- métodos do AG.
-
-### Dias 6–7
-
-Integração:
-
-```text
-Pontos
-  ↓
-Indivíduos
-  ↓
-População
-  ↓
-Métodos do AG
-  ↓
-Nova população
-```
-
-Ao final da primeira semana, o algoritmo básico deverá estar funcionando.
-
----
-
-# Semana 2 — Testes e experimentos
-
-### Dias 8–9
-
-- corrigir bugs;
-- testar rotas;
-- verificar se nenhuma rota possui pontos repetidos;
-- testar os métodos;
-- testar diferentes parâmetros.
-
-### Dias 10–11
-
-Executar os dois cenários:
-
-```text
-Aleatório
-Circular
-```
-
-Com diferentes quantidades de pontos.
-
-### Dias 12–13
-
-- coletar resultados;
-- gerar gráficos;
-- analisar convergência;
-- medir tempo;
-- comparar soluções.
-
-### Dia 14
-
-- revisão do código;
-- documentação;
-- README;
-- preparação da apresentação;
-- demonstração final.
-
----
-
-# 14. Experimentos
-
-Os valores definitivos ainda serão definidos pelo grupo.
-
-Uma primeira bateria poderia ser:
-
-| Cenário | Pontos | População | Épocas |
-|---|---:|---:|---:|
-| Aleatório | 8 | a definir | a definir |
-| Aleatório | 20 | a definir | a definir |
-| Aleatório | 50 | a definir | a definir |
-| Circular | 8 | a definir | a definir |
-| Circular | 20 | a definir | a definir |
-| Circular | 50 | a definir | a definir |
-
-A ideia é **não fixar os parâmetros antes dos testes**.
-
-Durante o desenvolvimento, o grupo poderá comparar diferentes configurações e justificar as escolhas no trabalho.
-
----
-
-# 15. Critérios que serão avaliados
-
-O programa deverá permitir analisar:
-
-- qualidade da solução;
-- distância encontrada;
-- velocidade de convergência;
-- tempo de execução;
-- comportamento ao aumentar a quantidade de pontos;
-- comportamento nos cenários aleatório e circular;
-- influência dos parâmetros escolhidos.
-
-Também deverá ser possível mostrar a solução e seu desempenho **a cada época**, conforme solicitado no enunciado.
-
----
-
-# 16. Benchmark circular
+# 12. Benchmark circular
 
 O cenário circular será particularmente importante.
 
@@ -609,31 +398,7 @@ Isso fornece uma maneira objetiva de avaliar a qualidade do algoritmo.
 
 ---
 
-# 17. Bônus
-
-Depois de o programa principal estar funcionando, será realizado um experimento com uma quantidade elevada de pontos no cenário circular.
-
-Por exemplo:
-
-```text
-500 pontos
-1000 pontos
-2000 pontos
-```
-
-Serão registrados:
-
-- tempo de execução;
-- épocas intermediárias;
-- melhor distância;
-- momento da convergência;
-- erro em relação ao benchmark.
-
-O bônus será implementado somente depois de todos os requisitos obrigatórios estarem funcionando.
-
----
-
-# 18. Princípio de desenvolvimento
+# 13. Princípio de desenvolvimento
 
 Durante a primeira fase, o grupo **não deve tentar otimizar o código prematuramente**.
 
@@ -655,7 +420,7 @@ Os métodos do Algoritmo Genético serão mantidos flexíveis até que o grupo f
 
 ---
 
-# 19. Estado inicial do projeto
+# 14. Estado inicial do projeto
 
 Neste momento, as seguintes decisões estão definidas:
 
@@ -696,14 +461,3 @@ As decisões marcadas como **Método 1, Método 2, etc.** serão preenchidas dep
 
 ---
 
-# 20. Próximo passo
-
-Antes de começar a implementar, o grupo deve definir:
-
-1. quais métodos de seleção serão estudados;
-2. quais métodos de cruzamento são adequados para permutações;
-3. quais métodos de mutação serão estudados;
-4. quais critérios de parada serão comparados;
-5. quais valores iniciais de população, mutação e épocas serão testados.
-
-Somente depois disso os métodos específicos deverão ser incorporados ao código.
