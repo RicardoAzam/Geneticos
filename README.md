@@ -46,8 +46,6 @@ Método 3
 ...
 ```
 
-Depois que o grupo estudar e escolher os métodos, os nomes poderão ser substituídos.
-
 ---
 
 # 3. Representação da solução
