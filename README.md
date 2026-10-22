@@ -1,3 +1,5 @@
+
+
 # Geneticos
 # Algoritmo Genético para o Problema do Caixeiro Viajante (TSP)
 
@@ -460,4 +462,3 @@ configuráveis
 As decisões marcadas como **Método 1, Método 2, etc.** serão preenchidas depois da pesquisa do grupo.
 
 ---
-

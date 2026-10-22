@@ -1,3 +1,4 @@
+
 #ifndef INDIVIDUO_H
 #define INDIVIDUO_H
 
@@ -24,4 +25,3 @@ double calcularAptidao(double distancia);
 void liberarIndividuo(Individuo *individuo);
 
 #endif
-

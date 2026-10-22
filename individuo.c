@@ -1,3 +1,4 @@
+
 #include "individuo.h"
 
 #include <math.h>
@@ -112,5 +113,4 @@ Individuo criarIndividuoAleatorio(int quantidade, int n_individuos)
 
     return individuo;
 }
-
 
