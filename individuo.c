@@ -78,3 +78,39 @@ void liberarIndividuo(Individuo *individuo)
     individuo->distancia = 0.0;
     individuo->aptidao = 0.0;
 }
+
+void embaralharRota(Individuo *individuo, int quantidade)
+{
+    if (individuo == NULL ||
+        individuo->rota == NULL ||
+        quantidade <= 1) {
+        return;
+    }
+
+    for (int i = quantidade - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+
+        int temp = individuo->rota[i];
+        individuo->rota[i] = individuo->rota[j];
+        individuo->rota[j] = temp;
+    }
+}
+
+Individuo criarIndividuoAleatorio(int quantidade, int n_individuos)
+{
+    int i;
+    Individuo individuo;
+    for(i=0; i<n_individuos; i++)
+    {
+        individuo = criarIndividuo(quantidade);
+
+        if (individuo.rota == NULL) {
+            return individuo;
+        }
+    }
+    embaralharRota(&individuo, quantidade);
+
+    return individuo;
+}
+
+

@@ -9,18 +9,19 @@ typedef struct {
     double aptidao;
 } Individuo;
 
-/* Cria um indivíduo com uma rota */
 Individuo criarIndividuo(int quantidade);
 
-/* Calcula a distância total da rota */
+void embaralharRota(Individuo *individuo, int quantidade);
+
+Individuo criarIndividuoAleatorio(int quantidade, int n_individuos);
+
 double calcularDistancia(const Individuo *individuo,
                          const Ponto *pontos,
                          int quantidade);
 
-/* Calcula a aptidão do indivíduo */
 double calcularAptidao(double distancia);
 
-/* Libera a memória da rota */
 void liberarIndividuo(Individuo *individuo);
 
 #endif
+
