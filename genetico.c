@@ -309,5 +309,9 @@ int executarAlgoritmoGenetico(const Ponto *pontos,
 
     liberarIndividuo(&melhorHistorico);
     liberarPopulacao(populacao, tamanhoPopulacao);
+    if (arquivoCSV != NULL) {
+        fclose(arquivoCSV);
+        printf("\nEstatisticas salvas em: %s\n", nomeCSV);
+    }
     return 1;
 }

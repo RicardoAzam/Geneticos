@@ -1,6 +1,61 @@
 # Geneticos
 # Algoritmo Genético para o Problema do Caixeiro Viajante (TSP)
 
+## Compilação e execução
+
+### 1. Pré-requisitos
+
+- GCC ou Clang para compilar os arquivos C.
+- Python 3: https://www.python.org/downloads/
+- Biblioteca Matplotlib para gerar os gráficos.
+
+Instale o Matplotlib pelo terminal:
+
+```bash
+python3 -m pip install matplotlib
+```
+
+### 2. Compilar o projeto em C
+
+Na pasta do projeto, execute:
+
+```bash
+gcc main.c ponto.c individuo.c genetico.c -lm -o tsp
+```
+
+Execute o programa:
+
+```bash
+./tsp
+```
+
+Escolha o método de seleção e informe os parâmetros solicitados pelo programa: tamanho da população, número de gerações e taxa de mutação.
+
+### 3. Gerar os gráficos com Python
+
+Após executar o algoritmo e gerar o arquivo CSV, execute o script Python correspondente.
+
+**Seleção por torneio:**
+
+```bash
+python3 graficos.py resultados_torneio.csv
+```
+
+**Seleção por ranking:**
+
+```bash
+python3 graficos.py resultados_ranking.csv
+```
+
+Os gráficos serão exibidos na tela e salvos como imagens PNG.
+
+### Observações
+
+- Execute os comandos na pasta onde estão os arquivos do projeto.
+- Os arquivos CSV precisam existir antes de gerar os gráficos.
+- Cada nova execução pode sobrescrever o CSV anterior. Salve uma cópia se quiser preservar os resultados.
+- No Windows, pode ser necessário usar `python` no lugar de `python3` e executar `.\tsp.exe` no lugar de `./tsp`.
+
 ## 1. Objetivo
 
 O projeto consiste em desenvolver, em **C**, um **Algoritmo Genético** para encontrar uma solução localmente boa para o Problema do Caixeiro Viajante (TSP).
