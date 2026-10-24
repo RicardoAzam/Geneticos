@@ -1,5 +1,3 @@
-
-
 # Geneticos
 # Algoritmo Genético para o Problema do Caixeiro Viajante (TSP)
 

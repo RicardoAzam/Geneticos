@@ -17,6 +17,40 @@ static void avaliarPopulacao(Individuo *populacao, int tamanho,
     }
 }
 
+static void registrarEstatisticas(
+    FILE *arquivo,
+    int geracao,
+    const Individuo *populacao,
+    int tamanho)
+{
+    if (arquivo == NULL || populacao == NULL || tamanho <= 0) {
+        return;
+    }
+
+    double melhor = populacao[0].distancia;
+    double pior = populacao[0].distancia;
+    double soma = 0.0;
+
+    for (int i = 0; i < tamanho; i++) {
+        double distancia = populacao[i].distancia;
+
+        if (distancia < melhor) {
+            melhor = distancia;
+        }
+
+        if (distancia > pior) {
+            pior = distancia;
+        }
+
+        soma += distancia;
+    }
+
+    double media = soma / tamanho;
+
+    fprintf(arquivo, "%d,%.6f,%.6f,%.6f\n",
+            geracao, melhor, media, pior);
+}
+
 static int copiarIndividuo(Individuo *destino, const Individuo *origem,
                            int quantidadePontos)
 {
@@ -190,6 +224,23 @@ int executarAlgoritmoGenetico(const Ponto *pontos,
            tamanhoPopulacao, quantidadePontos);
     printf("Metodo de selecao: %s\n",
            metodo == SELECAO_RANKING ? "Ranking" : "Torneio");
+    
+    const char *nomeCSV =
+    (metodo == SELECAO_RANKING)
+    ? "resultados_ranking.csv"
+    : "resultados_torneio.csv";
+
+    FILE *arquivoCSV = fopen(nomeCSV, "w");
+
+    if (arquivoCSV != NULL) {
+        fprintf(arquivoCSV,"geracao,melhor_distancia,distancia_media,pior_distancia\n");
+
+        /* Registra a população inicial, antes da evolução. */
+        registrarEstatisticas(arquivoCSV, 0, populacao, tamanhoPopulacao);
+    } else 
+    {
+        fprintf(stderr, "Aviso: nao foi possivel criar o CSV.\n");
+    }
 
     for (int geracao = 1; geracao <= numeroGeracoes; geracao++) {
         Individuo *nova = calloc((size_t)tamanhoPopulacao, sizeof(Individuo));
@@ -235,6 +286,7 @@ int executarAlgoritmoGenetico(const Ponto *pontos,
         liberarPopulacao(populacao, tamanhoPopulacao);
         populacao = nova;
         avaliarPopulacao(populacao, tamanhoPopulacao, pontos, quantidadePontos);
+        registrarEstatisticas(arquivoCSV,geracao,populacao,tamanhoPopulacao);
 
         melhorAtual = indiceMelhor(populacao, tamanhoPopulacao);
         if (populacao[melhorAtual].distancia < melhorHistorico.distancia) {
