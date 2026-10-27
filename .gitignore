@@ -1,0 +1,8 @@
+# binarios e temporarios
+tsp
+tsp.exe
+gen
+*.o
+__pycache__/
+__MACOSX/
+.DS_Store

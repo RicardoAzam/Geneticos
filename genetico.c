@@ -3,9 +3,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define TAMANHO_TORNEIO 3
-#define ELITISMO 1
+
+/* Melhora menor que isso e ruido de ponto flutuante, nao conta como progresso. */
+#define MELHORIA_MINIMA 1e-9
+
+/* Ate esse tamanho a rota tambem e escrita na tela a cada epoca registrada. */
+#define LIMITE_PONTOS_PARA_IMPRIMIR_ROTA 30
+
+typedef struct {
+    double melhor;
+    double media;
+    double pior;
+} EstatisticasEpoca;
+
+typedef struct {
+    int indice;
+    double aptidao;
+} ItemRanking;
+
+static double segundosDesde(clock_t instanteInicial)
+{
+    return (double)(clock() - instanteInicial) / CLOCKS_PER_SEC;
+}
+
+/* Sorteia um numero real em [0, 1). */
+static double sortearProbabilidade(void)
+{
+    return (double)rand() / ((double)RAND_MAX + 1.0);
+}
 
 static void avaliarPopulacao(Individuo *populacao, int tamanho,
                              const Ponto *pontos, int quantidadePontos)
@@ -17,301 +45,530 @@ static void avaliarPopulacao(Individuo *populacao, int tamanho,
     }
 }
 
-static void registrarEstatisticas(
-    FILE *arquivo,
-    int geracao,
-    const Individuo *populacao,
-    int tamanho)
+static void liberarPopulacao(Individuo *populacao, int tamanho)
 {
-    if (arquivo == NULL || populacao == NULL || tamanho <= 0) {
+    if (populacao == NULL) {
         return;
     }
 
-    double melhor = populacao[0].distancia;
-    double pior = populacao[0].distancia;
-    double soma = 0.0;
-
     for (int i = 0; i < tamanho; i++) {
-        double distancia = populacao[i].distancia;
-
-        if (distancia < melhor) {
-            melhor = distancia;
-        }
-
-        if (distancia > pior) {
-            pior = distancia;
-        }
-
-        soma += distancia;
+        liberarIndividuo(&populacao[i]);
     }
 
-    double media = soma / tamanho;
-
-    fprintf(arquivo, "%d,%.6f,%.6f,%.6f\n",
-            geracao, melhor, media, pior);
+    free(populacao);
 }
 
-static int copiarIndividuo(Individuo *destino, const Individuo *origem,
-                           int quantidadePontos)
+static Individuo *criarPopulacao(int tamanho, int quantidadePontos)
 {
-    destino->rota = malloc((size_t)quantidadePontos * sizeof(int));
-    if (destino->rota == NULL) return 0;
+    Individuo *populacao = calloc((size_t)tamanho, sizeof(Individuo));
 
-    memcpy(destino->rota, origem->rota,
-           (size_t)quantidadePontos * sizeof(int));
+    if (populacao == NULL) {
+        return NULL;
+    }
+
+    for (int i = 0; i < tamanho; i++) {
+        populacao[i] = criarIndividuo(quantidadePontos);
+
+        if (populacao[i].rota == NULL) {
+            liberarPopulacao(populacao, tamanho);
+            return NULL;
+        }
+    }
+
+    return populacao;
+}
+
+/* Copia o conteudo de um individuo para outro que ja tem a rota alocada. */
+static void copiarIndividuo(Individuo *destino, const Individuo *origem,
+                            int quantidadePontos)
+{
+    memcpy(destino->rota, origem->rota, (size_t)quantidadePontos * sizeof(int));
     destino->distancia = origem->distancia;
     destino->aptidao = origem->aptidao;
-    return 1;
 }
 
 static int indiceMelhor(const Individuo *populacao, int tamanho)
 {
     int melhor = 0;
+
     for (int i = 1; i < tamanho; i++) {
-        if (populacao[i].distancia < populacao[melhor].distancia)
+        if (populacao[i].distancia < populacao[melhor].distancia) {
             melhor = i;
+        }
     }
+
     return melhor;
 }
 
+static EstatisticasEpoca calcularEstatisticas(const Individuo *populacao,
+                                              int tamanho)
+{
+    EstatisticasEpoca estatisticas;
+    double soma = 0.0;
+
+    estatisticas.melhor = populacao[0].distancia;
+    estatisticas.pior = populacao[0].distancia;
+
+    for (int i = 0; i < tamanho; i++) {
+        double distancia = populacao[i].distancia;
+
+        if (distancia < estatisticas.melhor) {
+            estatisticas.melhor = distancia;
+        }
+
+        if (distancia > estatisticas.pior) {
+            estatisticas.pior = distancia;
+        }
+
+        soma += distancia;
+    }
+
+    estatisticas.media = soma / tamanho;
+
+    return estatisticas;
+}
+
+static void registrarEstatisticas(FILE *arquivo, int epoca,
+                                  const EstatisticasEpoca *estatisticas)
+{
+    if (arquivo == NULL) {
+        return;
+    }
+
+    fprintf(arquivo, "%d,%.6f,%.6f,%.6f\n",
+            epoca, estatisticas->melhor, estatisticas->media,
+            estatisticas->pior);
+}
+
+/* Grava a melhor rota da epoca no CSV e acompanha a evolucao na tela. */
+static void registrarSolucao(FILE *arquivoRotas, int epoca, int maxEpocas,
+                             const Individuo *melhor, int quantidadePontos,
+                             const EstatisticasEpoca *estatisticas)
+{
+    if (arquivoRotas != NULL) {
+        fprintf(arquivoRotas, "%d,%.6f,", epoca, melhor->distancia);
+
+        for (int i = 0; i < quantidadePontos; i++) {
+            if (i > 0) {
+                fprintf(arquivoRotas, " ");
+            }
+            fprintf(arquivoRotas, "%d", melhor->rota[i]);
+        }
+
+        fprintf(arquivoRotas, "\n");
+    }
+
+    printf("Epoca %5d/%d | melhor: %10.3f | media: %10.3f\n",
+           epoca, maxEpocas, estatisticas->melhor, estatisticas->media);
+
+    if (quantidadePontos <= LIMITE_PONTOS_PARA_IMPRIMIR_ROTA) {
+        printf("    Rota: ");
+        imprimirRota(melhor, quantidadePontos);
+        printf("\n");
+    }
+}
+
+/* ------------------------------ Selecao ------------------------------ */
+
+/* Torneio: sorteia TAMANHO_TORNEIO individuos e vence o de maior aptidao. */
 static int selecionarTorneio(const Individuo *populacao, int tamanho)
 {
-    int melhor = rand() % tamanho;
-    for (int i = 1; i < TAMANHO_TORNEIO; i++) {
-        int candidato = rand() % tamanho;
-        if (populacao[candidato].distancia < populacao[melhor].distancia)
-            melhor = candidato;
+    int vencedor = rand() % tamanho;
+
+    for (int disputa = 1; disputa < TAMANHO_TORNEIO; disputa++) {
+        int desafiante = rand() % tamanho;
+
+        if (populacao[desafiante].aptidao > populacao[vencedor].aptidao) {
+            vencedor = desafiante;
+        }
     }
-    return melhor;
+
+    return vencedor;
 }
 
-/* Ranking: melhores recebem peso maior (N para o melhor, 1 para o pior). */
-static int selecionarRanking(const Individuo *populacao, int tamanho)
+static int compararAptidaoDecrescente(const void *itemA, const void *itemB)
 {
-    int *ordem = malloc((size_t)tamanho * sizeof(int));
-    if (ordem == NULL) return selecionarTorneio(populacao, tamanho);
+    const ItemRanking *primeiro = (const ItemRanking *)itemA;
+    const ItemRanking *segundo = (const ItemRanking *)itemB;
 
-    for (int i = 0; i < tamanho; i++) ordem[i] = i;
-    for (int i = 0; i < tamanho - 1; i++) {
-        for (int j = i + 1; j < tamanho; j++) {
-            if (populacao[ordem[j]].distancia < populacao[ordem[i]].distancia) {
-                int temp = ordem[i]; ordem[i] = ordem[j]; ordem[j] = temp;
-            }
-        }
+    if (primeiro->aptidao > segundo->aptidao) {
+        return -1;
     }
 
-    int totalPesos = tamanho * (tamanho + 1) / 2;
-    int sorteio = rand() % totalPesos;
-    int acumulado = 0;
-    int escolhido = ordem[tamanho - 1];
+    if (primeiro->aptidao < segundo->aptidao) {
+        return 1;
+    }
 
-    for (int pos = 0; pos < tamanho; pos++) {
-        acumulado += tamanho - pos;
+    return 0;
+}
+
+/* Ordena a populacao por aptidao uma unica vez por epoca. */
+static void prepararRanking(const Individuo *populacao, int tamanho,
+                            ItemRanking *ranking)
+{
+    for (int i = 0; i < tamanho; i++) {
+        ranking[i].indice = i;
+        ranking[i].aptidao = populacao[i].aptidao;
+    }
+
+    qsort(ranking, (size_t)tamanho, sizeof(ItemRanking),
+          compararAptidaoDecrescente);
+}
+
+/* Ranking: o melhor tem peso N, o segundo N-1, ..., o pior tem peso 1. */
+static int selecionarRanking(const ItemRanking *ranking, int tamanho)
+{
+    double totalPesos = (double)tamanho * (tamanho + 1) / 2.0;
+    double sorteio = sortearProbabilidade() * totalPesos;
+    double acumulado = 0.0;
+
+    for (int posicao = 0; posicao < tamanho; posicao++) {
+        acumulado += tamanho - posicao;
+
         if (sorteio < acumulado) {
-            escolhido = ordem[pos];
-            break;
+            return ranking[posicao].indice;
         }
     }
 
-    free(ordem);
-    return escolhido;
+    return ranking[tamanho - 1].indice;
 }
 
 static int selecionarPai(const Individuo *populacao, int tamanho,
-                         MetodoSelecao metodo)
+                         MetodoSelecao metodo, const ItemRanking *ranking)
 {
-    if (metodo == SELECAO_RANKING)
-        return selecionarRanking(populacao, tamanho);
+    if (metodo == SELECAO_RANKING) {
+        return selecionarRanking(ranking, tamanho);
+    }
+
     return selecionarTorneio(populacao, tamanho);
 }
 
-/* Order Crossover (OX): preserva uma permutação válida dos pontos. */
+/* ----------------------------- Cruzamento ----------------------------- */
+
+/*
+ * Order Crossover (OX): o filho herda um trecho do pai1 na mesma posicao e
+ * completa as demais posicoes com as cidades restantes na ordem do pai2.
+ * O vetor cidadeUsada (tamanho n) evita buscas repetidas no trecho copiado.
+ */
 static void cruzamentoOX(const Individuo *pai1, const Individuo *pai2,
-                         Individuo *filho, int n)
+                         Individuo *filho, int n, int *cidadeUsada)
 {
     int inicio = rand() % n;
     int fim = rand() % n;
-    if (inicio > fim) { int t = inicio; inicio = fim; fim = t; }
 
-    for (int i = 0; i < n; i++) filho->rota[i] = -1;
-    for (int i = inicio; i <= fim; i++) filho->rota[i] = pai1->rota[i];
+    if (inicio > fim) {
+        int temp = inicio;
+        inicio = fim;
+        fim = temp;
+    }
 
-    int posFilho = (fim + 1) % n;
-    int posPai = (fim + 1) % n;
+    for (int i = 0; i < n; i++) {
+        filho->rota[i] = -1;
+        cidadeUsada[i] = 0;
+    }
+
+    for (int i = inicio; i <= fim; i++) {
+        filho->rota[i] = pai1->rota[i];
+        cidadeUsada[pai1->rota[i]] = 1;
+    }
+
+    int posicaoFilho = (fim + 1) % n;
+    int posicaoPai = (fim + 1) % n;
     int preenchidos = fim - inicio + 1;
 
     while (preenchidos < n) {
-        int cidade = pai2->rota[posPai];
-        int existe = 0;
-        for (int j = inicio; j <= fim; j++) {
-            if (filho->rota[j] == cidade) { existe = 1; break; }
-        }
-        if (!existe) {
-            filho->rota[posFilho] = cidade;
-            posFilho = (posFilho + 1) % n;
+        int cidade = pai2->rota[posicaoPai];
+
+        if (cidadeUsada[cidade] == 0) {
+            filho->rota[posicaoFilho] = cidade;
+            cidadeUsada[cidade] = 1;
+            posicaoFilho = (posicaoFilho + 1) % n;
             preenchidos++;
         }
-        posPai = (posPai + 1) % n;
+
+        posicaoPai = (posicaoPai + 1) % n;
     }
 }
 
-static void mutar(Individuo *individuo, int n, double taxaMutacao)
+/* ------------------------------- Mutacao ------------------------------- */
+
+/* Troca a posicao de duas cidades sorteadas. */
+static void mutarTroca(Individuo *individuo, int n)
 {
-    double sorteio = (double)rand() / ((double)RAND_MAX + 1.0);
-    if (n > 1 && sorteio < taxaMutacao) {
-        int a = rand() % n;
-        int b = rand() % n;
-        while (b == a) b = rand() % n;
-        int temp = individuo->rota[a];
-        individuo->rota[a] = individuo->rota[b];
-        individuo->rota[b] = temp;
+    int posicaoA = rand() % n;
+    int posicaoB = rand() % n;
+
+    while (posicaoB == posicaoA) {
+        posicaoB = rand() % n;
+    }
+
+    int temp = individuo->rota[posicaoA];
+    individuo->rota[posicaoA] = individuo->rota[posicaoB];
+    individuo->rota[posicaoB] = temp;
+}
+
+/* Inverte um trecho da rota (equivale a um movimento 2-opt). */
+static void mutarInversao(Individuo *individuo, int n)
+{
+    int inicio = rand() % n;
+    int fim = rand() % n;
+
+    if (inicio > fim) {
+        int temp = inicio;
+        inicio = fim;
+        fim = temp;
+    }
+
+    while (inicio < fim) {
+        int temp = individuo->rota[inicio];
+        individuo->rota[inicio] = individuo->rota[fim];
+        individuo->rota[fim] = temp;
+
+        inicio++;
+        fim--;
     }
 }
 
-static void liberarPopulacao(Individuo *populacao, int tamanho)
+/* A taxa de mutacao e a probabilidade de cada filho sofrer uma mutacao. */
+static void mutar(Individuo *individuo, int n, double taxaMutacao,
+                  MetodoMutacao metodo)
 {
-    if (populacao == NULL) return;
-    for (int i = 0; i < tamanho; i++) liberarIndividuo(&populacao[i]);
-    free(populacao);
+    if (n < 2) {
+        return;
+    }
+
+    if (sortearProbabilidade() >= taxaMutacao) {
+        return;
+    }
+
+    if (metodo == MUTACAO_INVERSAO) {
+        mutarInversao(individuo, n);
+    } else {
+        mutarTroca(individuo, n);
+    }
 }
 
-static void imprimirRota(const Individuo *individuo, int n)
+/* ---------------------------- Algoritmo ---------------------------- */
+
+static int configuracaoValida(const ConfigGenetico *config)
 {
-    for (int i = 0; i < n; i++)
-        printf("%d%s", individuo->rota[i], (i == n - 1) ? "" : " -> ");
-    printf(" -> %d", individuo->rota[0]);
+    if (config->quantidadePontos < 2) {
+        return 0;
+    }
+
+    if (config->tamanhoPopulacao < 3) {
+        return 0;
+    }
+
+    if (config->maxEpocas < 1) {
+        return 0;
+    }
+
+    if (config->taxaMutacao < 0.0 || config->taxaMutacao > 1.0) {
+        return 0;
+    }
+
+    if (config->taxaCruzamento < 0.0 || config->taxaCruzamento > 1.0) {
+        return 0;
+    }
+
+    if (config->intervaloRegistro < 1) {
+        return 0;
+    }
+
+    if (config->limiteEstagnacao < 0 || config->toleranciaErroPercentual < 0.0) {
+        return 0;
+    }
+
+    return 1;
 }
 
 int executarAlgoritmoGenetico(const Ponto *pontos,
-                              int quantidadePontos,
-                              int tamanhoPopulacao,
-                              int numeroGeracoes,
-                              double taxaMutacao,
-                              MetodoSelecao metodo)
+                              const ConfigGenetico *config,
+                              ResultadoGenetico *resultado)
 {
-    if (pontos == NULL || quantidadePontos < 2 || tamanhoPopulacao < 3 ||
-        numeroGeracoes < 1 || taxaMutacao < 0.0 || taxaMutacao > 1.0) {
-        fprintf(stderr, "Parametros invalidos. Use populacao >= 3, geracoes >= 1 e mutacao entre 0 e 1.\n");
+    if (pontos == NULL || config == NULL || resultado == NULL ||
+        configuracaoValida(config) == 0) {
+        fprintf(stderr, "Parametros invalidos para o algoritmo genetico.\n");
         return 0;
     }
 
-    Individuo *populacao = calloc((size_t)tamanhoPopulacao, sizeof(Individuo));
-    if (populacao == NULL) {
-        fprintf(stderr, "Nao foi possivel alocar a populacao.\n");
+    int n = config->quantidadePontos;
+    int tamanho = config->tamanhoPopulacao;
+    clock_t instanteInicial = clock();
+
+    /* Toda a memoria e alocada uma vez; as duas populacoes se alternam. */
+    Individuo *populacaoAtual = criarPopulacao(tamanho, n);
+    Individuo *proximaPopulacao = criarPopulacao(tamanho, n);
+    Individuo melhorHistorico = criarIndividuo(n);
+    ItemRanking *ranking = malloc((size_t)tamanho * sizeof(ItemRanking));
+    int *cidadeUsada = malloc((size_t)n * sizeof(int));
+
+    if (populacaoAtual == NULL || proximaPopulacao == NULL ||
+        melhorHistorico.rota == NULL || ranking == NULL || cidadeUsada == NULL) {
+        fprintf(stderr, "Nao foi possivel alocar memoria.\n");
+        liberarPopulacao(populacaoAtual, tamanho);
+        liberarPopulacao(proximaPopulacao, tamanho);
+        liberarIndividuo(&melhorHistorico);
+        free(ranking);
+        free(cidadeUsada);
         return 0;
     }
 
-    for (int i = 0; i < tamanhoPopulacao; i++) {
-        populacao[i] = criarIndividuo(quantidadePontos);
-        if (populacao[i].rota == NULL) {
-            liberarPopulacao(populacao, tamanhoPopulacao);
-            fprintf(stderr, "Erro ao criar individuo.\n");
-            return 0;
-        }
-        embaralharRota(&populacao[i], quantidadePontos);
+    for (int i = 0; i < tamanho; i++) {
+        embaralharRota(&populacaoAtual[i], n);
     }
-    avaliarPopulacao(populacao, tamanhoPopulacao, pontos, quantidadePontos);
+    avaliarPopulacao(populacaoAtual, tamanho, pontos, n);
 
-    int melhorGlobal = indiceMelhor(populacao, tamanhoPopulacao);
-    Individuo melhorHistorico = {NULL, 0.0, 0.0};
-    if (!copiarIndividuo(&melhorHistorico, &populacao[melhorGlobal], quantidadePontos)) {
-        liberarPopulacao(populacao, tamanhoPopulacao);
-        fprintf(stderr, "Erro ao guardar melhor individuo.\n");
-        return 0;
+    int indiceInicial = indiceMelhor(populacaoAtual, tamanho);
+    copiarIndividuo(&melhorHistorico, &populacaoAtual[indiceInicial], n);
+
+    char nomeEstatisticas[200];
+    char nomeRotas[200];
+    snprintf(nomeEstatisticas, sizeof(nomeEstatisticas), "%s_estatisticas.csv",
+             config->prefixoArquivos);
+    snprintf(nomeRotas, sizeof(nomeRotas), "%s_rotas.csv",
+             config->prefixoArquivos);
+
+    FILE *arquivoEstatisticas = fopen(nomeEstatisticas, "w");
+    FILE *arquivoRotas = fopen(nomeRotas, "w");
+
+    if (arquivoEstatisticas == NULL || arquivoRotas == NULL) {
+        fprintf(stderr, "Aviso: nao foi possivel criar os arquivos CSV.\n");
+    }
+
+    if (arquivoEstatisticas != NULL) {
+        fprintf(arquivoEstatisticas,
+                "epoca,melhor_distancia,distancia_media,pior_distancia\n");
+    }
+
+    if (arquivoRotas != NULL) {
+        fprintf(arquivoRotas, "epoca,distancia,rota\n");
     }
 
     printf("\nPopulacao inicial: %d individuos | pontos por rota: %d\n",
-           tamanhoPopulacao, quantidadePontos);
-    printf("Metodo de selecao: %s\n",
-           metodo == SELECAO_RANKING ? "Ranking" : "Torneio");
-    
-    const char *nomeCSV =
-    (metodo == SELECAO_RANKING)
-    ? "resultados_ranking.csv"
-    : "resultados_torneio.csv";
+           tamanho, n);
 
-    FILE *arquivoCSV = fopen(nomeCSV, "w");
+    /* Epoca 0: populacao inicial, antes de qualquer evolucao. */
+    EstatisticasEpoca estatisticasAtuais = calcularEstatisticas(populacaoAtual, tamanho);
+    registrarEstatisticas(arquivoEstatisticas, 0, &estatisticasAtuais);
+    registrarSolucao(arquivoRotas, 0, config->maxEpocas,
+                     &populacaoAtual[indiceInicial], n, &estatisticasAtuais);
 
-    if (arquivoCSV != NULL) {
-        fprintf(arquivoCSV,"geracao,melhor_distancia,distancia_media,pior_distancia\n");
+    int epocaAtual = 0;
+    int ultimaEpocaRegistrada = 0;
+    int epocasSemMelhora = 0;
+    int epocaMelhorSolucao = 0;
+    double tempoMelhorSolucao = segundosDesde(instanteInicial);
+    MotivoParada motivoParada = PARADA_MAX_EPOCAS;
+    int deveContinuar = 1;
 
-        /* Registra a população inicial, antes da evolução. */
-        registrarEstatisticas(arquivoCSV, 0, populacao, tamanhoPopulacao);
-    } else 
-    {
-        fprintf(stderr, "Aviso: nao foi possivel criar o CSV.\n");
-    }
+    while (deveContinuar == 1 && epocaAtual < config->maxEpocas) {
+        epocaAtual++;
 
-    for (int geracao = 1; geracao <= numeroGeracoes; geracao++) {
-        Individuo *nova = calloc((size_t)tamanhoPopulacao, sizeof(Individuo));
-        if (nova == NULL) {
-            liberarIndividuo(&melhorHistorico);
-            liberarPopulacao(populacao, tamanhoPopulacao);
-            fprintf(stderr, "Erro ao alocar nova geracao.\n");
-            return 0;
+        if (config->metodoSelecao == SELECAO_RANKING) {
+            prepararRanking(populacaoAtual, tamanho, ranking);
         }
 
-        int melhorAtual = indiceMelhor(populacao, tamanhoPopulacao);
-        int quantidadeNova = 0;
+        /* Elitismo: o melhor da epoca anterior passa sem alteracao. */
+        int indiceElite = indiceMelhor(populacaoAtual, tamanho);
+        copiarIndividuo(&proximaPopulacao[0], &populacaoAtual[indiceElite], n);
 
-        /* Elitismo: conserva o melhor sem alteracao. */
-        if (!copiarIndividuo(&nova[quantidadeNova++], &populacao[melhorAtual], quantidadePontos)) {
-            liberarPopulacao(nova, tamanhoPopulacao);
-            liberarIndividuo(&melhorHistorico);
-            liberarPopulacao(populacao, tamanhoPopulacao);
-            fprintf(stderr, "Erro ao copiar elite.\n");
-            return 0;
-        }
+        for (int posicao = 1; posicao < tamanho; posicao++) {
+            int indicePai1 = selecionarPai(populacaoAtual, tamanho,
+                                           config->metodoSelecao, ranking);
+            int indicePai2 = selecionarPai(populacaoAtual, tamanho,
+                                           config->metodoSelecao, ranking);
+            Individuo *filho = &proximaPopulacao[posicao];
 
-        while (quantidadeNova < tamanhoPopulacao) {
-            int idxPai1 = selecionarPai(populacao, tamanhoPopulacao, metodo);
-            int idxPai2 = selecionarPai(populacao, tamanhoPopulacao, metodo);
-            Individuo filho = criarIndividuo(quantidadePontos);
-            if (filho.rota == NULL) {
-                liberarPopulacao(nova, tamanhoPopulacao);
-                liberarIndividuo(&melhorHistorico);
-                liberarPopulacao(populacao, tamanhoPopulacao);
-                fprintf(stderr, "Erro ao criar filho.\n");
-                return 0;
+            if (sortearProbabilidade() < config->taxaCruzamento) {
+                cruzamentoOX(&populacaoAtual[indicePai1],
+                             &populacaoAtual[indicePai2],
+                             filho, n, cidadeUsada);
+            } else {
+                memcpy(filho->rota, populacaoAtual[indicePai1].rota,
+                       (size_t)n * sizeof(int));
             }
 
-            cruzamentoOX(&populacao[idxPai1], &populacao[idxPai2], &filho, quantidadePontos);
-            mutar(&filho, quantidadePontos, taxaMutacao);
-            filho.distancia = calcularDistancia(&filho, pontos, quantidadePontos);
-            filho.aptidao = calcularAptidao(filho.distancia);
-            nova[quantidadeNova++] = filho; /* adiciona apenas uma vaga por vez */
+            mutar(filho, n, config->taxaMutacao, config->metodoMutacao);
+
+            filho->distancia = calcularDistancia(filho, pontos, n);
+            filho->aptidao = calcularAptidao(filho->distancia);
         }
 
-        /* A nova populacao tem sempre o mesmo tamanho da anterior. */
-        liberarPopulacao(populacao, tamanhoPopulacao);
-        populacao = nova;
-        avaliarPopulacao(populacao, tamanhoPopulacao, pontos, quantidadePontos);
-        registrarEstatisticas(arquivoCSV,geracao,populacao,tamanhoPopulacao);
+        /* A nova populacao vira a atual; a antiga sera sobrescrita na proxima epoca. */
+        Individuo *auxiliar = populacaoAtual;
+        populacaoAtual = proximaPopulacao;
+        proximaPopulacao = auxiliar;
 
-        melhorAtual = indiceMelhor(populacao, tamanhoPopulacao);
-        if (populacao[melhorAtual].distancia < melhorHistorico.distancia) {
-            Individuo copia = {NULL, 0.0, 0.0};
-            if (copiarIndividuo(&copia, &populacao[melhorAtual], quantidadePontos)) {
-                liberarIndividuo(&melhorHistorico);
-                melhorHistorico = copia;
+        estatisticasAtuais = calcularEstatisticas(populacaoAtual, tamanho);
+        registrarEstatisticas(arquivoEstatisticas, epocaAtual, &estatisticasAtuais);
+
+        int indiceMelhorAtual = indiceMelhor(populacaoAtual, tamanho);
+
+        if (populacaoAtual[indiceMelhorAtual].distancia <
+            melhorHistorico.distancia - MELHORIA_MINIMA) {
+            copiarIndividuo(&melhorHistorico, &populacaoAtual[indiceMelhorAtual], n);
+            epocaMelhorSolucao = epocaAtual;
+            tempoMelhorSolucao = segundosDesde(instanteInicial);
+            epocasSemMelhora = 0;
+        } else {
+            epocasSemMelhora++;
+        }
+
+        if (epocaAtual % config->intervaloRegistro == 0) {
+            registrarSolucao(arquivoRotas, epocaAtual, config->maxEpocas,
+                             &populacaoAtual[indiceMelhorAtual], n,
+                             &estatisticasAtuais);
+            ultimaEpocaRegistrada = epocaAtual;
+        }
+
+        /* Criterios de parada: tolerancia atingida, estagnacao ou max. de epocas. */
+        if (config->distanciaReferencia > 0.0 &&
+            config->toleranciaErroPercentual > 0.0) {
+            double erroPercentual =
+                (melhorHistorico.distancia - config->distanciaReferencia) /
+                config->distanciaReferencia * 100.0;
+
+            if (erroPercentual <= config->toleranciaErroPercentual) {
+                motivoParada = PARADA_TOLERANCIA;
+                deveContinuar = 0;
             }
         }
 
-        printf("Geracao %4d/%d | melhor distancia: %10.3f | populacao: %d\n",
-               geracao, numeroGeracoes, populacao[melhorAtual].distancia,
-               tamanhoPopulacao);
+        if (deveContinuar == 1 && config->limiteEstagnacao > 0 &&
+            epocasSemMelhora >= config->limiteEstagnacao) {
+            motivoParada = PARADA_ESTAGNACAO;
+            deveContinuar = 0;
+        }
     }
 
-    printf("\n===== MELHOR ROTA ENCONTRADA =====\nRota: ");
-    imprimirRota(&melhorHistorico, quantidadePontos);
-    printf("\nDistancia total: %.3f\nAptidao (1/distancia): %.6f\n",
-           melhorHistorico.distancia, melhorHistorico.aptidao);
-
-    liberarIndividuo(&melhorHistorico);
-    liberarPopulacao(populacao, tamanhoPopulacao);
-    if (arquivoCSV != NULL) {
-        fclose(arquivoCSV);
-        printf("\nEstatisticas salvas em: %s\n", nomeCSV);
+    /* A ultima epoca sempre fica registrada, mesmo fora do intervalo. */
+    if (ultimaEpocaRegistrada != epocaAtual) {
+        int indiceFinal = indiceMelhor(populacaoAtual, tamanho);
+        registrarSolucao(arquivoRotas, epocaAtual, config->maxEpocas,
+                         &populacaoAtual[indiceFinal], n, &estatisticasAtuais);
     }
+
+    resultado->melhorIndividuo = melhorHistorico;
+    resultado->epocasExecutadas = epocaAtual;
+    resultado->epocaMelhorSolucao = epocaMelhorSolucao;
+    resultado->tempoTotalSegundos = segundosDesde(instanteInicial);
+    resultado->tempoMelhorSolucaoSegundos = tempoMelhorSolucao;
+    resultado->motivoParada = motivoParada;
+
+    if (arquivoEstatisticas != NULL) {
+        fclose(arquivoEstatisticas);
+    }
+
+    if (arquivoRotas != NULL) {
+        fclose(arquivoRotas);
+    }
+
+    liberarPopulacao(populacaoAtual, tamanho);
+    liberarPopulacao(proximaPopulacao, tamanho);
+    free(ranking);
+    free(cidadeUsada);
+
     return 1;
 }

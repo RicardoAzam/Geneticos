@@ -14,13 +14,13 @@ Individuo criarIndividuo(int quantidade);
 
 void embaralharRota(Individuo *individuo, int quantidade);
 
-Individuo criarIndividuoAleatorio(int quantidade, int n_individuos);
-
 double calcularDistancia(const Individuo *individuo,
                          const Ponto *pontos,
                          int quantidade);
 
 double calcularAptidao(double distancia);
+
+void imprimirRota(const Individuo *individuo, int quantidade);
 
 void liberarIndividuo(Individuo *individuo);
 

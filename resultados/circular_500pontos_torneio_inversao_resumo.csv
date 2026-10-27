@@ -1,0 +1,2 @@
+cenario,pontos,populacao,epocas_maximas,epocas_executadas,taxa_mutacao,taxa_cruzamento,selecao,mutacao,semente,melhor_distancia,epoca_melhor,tempo_total_s,tempo_melhor_s,motivo_parada,distancia_referencia,erro_percentual
+circular,500,300,80000,26622,0.2000,0.9000,torneio,inversao,3,314.157198,26622,32.1484,32.1484,erro abaixo da tolerancia,314.157198,0.000000

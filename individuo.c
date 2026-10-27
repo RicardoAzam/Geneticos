@@ -2,6 +2,7 @@
 #include "individuo.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 Individuo criarIndividuo(int quantidade)
@@ -67,6 +68,20 @@ double calcularAptidao(double distancia)
     return 1.0 / distancia;
 }
 
+void imprimirRota(const Individuo *individuo, int quantidade)
+{
+    if (individuo == NULL || individuo->rota == NULL || quantidade <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < quantidade; i++) {
+        printf("%d -> ", individuo->rota[i]);
+    }
+
+    /* Retorno ao ponto inicial, fechando o ciclo. */
+    printf("%d", individuo->rota[0]);
+}
+
 void liberarIndividuo(Individuo *individuo)
 {
     if (individuo == NULL) {
@@ -96,21 +111,3 @@ void embaralharRota(Individuo *individuo, int quantidade)
         individuo->rota[j] = temp;
     }
 }
-
-Individuo criarIndividuoAleatorio(int quantidade, int n_individuos)
-{
-    int i;
-    Individuo individuo;
-    for(i=0; i<n_individuos; i++)
-    {
-        individuo = criarIndividuo(quantidade);
-
-        if (individuo.rota == NULL) {
-            return individuo;
-        }
-    }
-    embaralharRota(&individuo, quantidade);
-
-    return individuo;
-}
-

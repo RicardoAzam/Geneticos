@@ -57,6 +57,18 @@ Ponto *gerarPontosCirculares(int quantidade,
     return pontos;
 }
 
+double calcularPerimetroOtimoCirculo(int quantidade, double raio)
+{
+    if (quantidade < 3 || raio < 0) {
+        return 0.0;
+    }
+
+    /* Lado do poligono regular de N vertices inscrito no circulo: 2 r sen(pi/N). */
+    double ladoDoPoligono = 2.0 * raio * sin(PI / quantidade);
+
+    return quantidade * ladoDoPoligono;
+}
+
 void imprimirPontos(const Ponto *pontos, int quantidade)
 {
     if (pontos == NULL || quantidade <= 0) {
@@ -74,4 +86,26 @@ void imprimirPontos(const Ponto *pontos, int quantidade)
 void liberarPontos(Ponto *pontos)
 {
     free(pontos);
+}
+
+int salvarPontosCSV(const char *nomeArquivo, const Ponto *pontos, int quantidade)
+{
+    if (nomeArquivo == NULL || pontos == NULL || quantidade <= 0) {
+        return 0;
+    }
+
+    FILE *arquivo = fopen(nomeArquivo, "w");
+
+    if (arquivo == NULL) {
+        return 0;
+    }
+
+    fprintf(arquivo, "indice,x,y\n");
+
+    for (int i = 0; i < quantidade; i++) {
+        fprintf(arquivo, "%d,%.6f,%.6f\n", i, pontos[i].x, pontos[i].y);
+    }
+
+    fclose(arquivo);
+    return 1;
 }

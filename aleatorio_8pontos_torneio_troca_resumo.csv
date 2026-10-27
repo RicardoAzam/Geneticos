@@ -1,0 +1,2 @@
+cenario,pontos,populacao,epocas_maximas,epocas_executadas,taxa_mutacao,taxa_cruzamento,selecao,mutacao,semente,melhor_distancia,epoca_melhor,tempo_total_s,tempo_melhor_s,motivo_parada,distancia_referencia,erro_percentual
+aleatorio,8,10,200,200,0.1500,1.0000,torneio,troca,1793144078,261.422513,33,0.0019,0.0008,maximo de epocas,0.000000,0.000000
